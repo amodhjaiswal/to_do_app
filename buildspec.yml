@@ -15,6 +15,6 @@ phases:
         command: docker push ${ECR_REGISTRY_ID}.dkr.ecr.${ECR_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:latest
 
 env:
-  ECR_REGISTRY_ID: 148761652675
-  ECR_REGION: ap-southeast-2
-  ECR_REPOSITORY_NAME: test-node-app
+  ECR_REGISTRY_ID: "148761652675"
+  ECR_REGION: "ap-southeast-2"
+  ECR_REPOSITORY_NAME: "test-node-app"
