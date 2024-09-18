@@ -1,0 +1,20 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - name: Install dependencies
+        command: npm install
+      - name: Build the Docker image
+        command: docker build -t test-node-app .
+      - name: Tag the Docker image
+        command: docker tag test-node-app:latest ${ECR_REGISTRY_ID}.dkr.ecr.${ECR_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:latest
+      - name: Login to Amazon ECR using IAM role
+        command: $(aws ecr get-login-password --region ${ECR_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY_ID}.dkr.ecr.${ECR_REGION}.amazonaws.com)
+      - name: Push the Docker image to Amazon ECR
+        command: docker push ${ECR_REGISTRY_ID}.dkr.ecr.${ECR_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}:latest
+
+env:
+  ECR_REGISTRY_ID: 148761652675
+  ECR_REGION: ap-southeast-2
+  ECR_REPOSITORY_NAME: test-node-app
