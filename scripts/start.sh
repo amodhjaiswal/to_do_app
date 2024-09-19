@@ -1,11 +1,35 @@
-#!/bin/bash
-echo "Logging into Amazon ECR..."
-aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin 148761652675.dkr.ecr.ap-southeast-2.amazonaws.com
-echo "Pulling the latest Docker image..."
-docker pull 148761652675.dkr.ecr.ap-southeast-2.amazonaws.com/test-node-app:latest
-#echo "Stopping the existing Docker container..."
-#docker stop $(docker ps -a -q --filter ancestor=<account_id>.dkr.ecr.<region>.amazonaws.com/my-node-app:latest) || true
-#docker rm $(docker ps -a -q --filter ancestor=<account_id>.dkr.ecr.<region>.amazonaws.com/my-node-app:latest) || true
 
-echo "Running the latest Docker container..."
-docker run -d -p 3000:3000 148761652675.dkr.ecr.ap-southeast-2.amazonaws.com/test-node-app:latest
+#!/bin/bash
+
+# Define variables
+REGION="ap-southeast-2"  # AWS region
+ACCOUNT_ID="148761652675"  # Your AWS account ID
+REPOSITORY_NAME="test-node-app"  # ECR repository name
+IMAGE_TAG="latest"  # Tag of the image you want to pull
+CONTAINER_NAME="test-node-app"  # Name of the container
+PORT="3000"  # Port to expose
+
+# Function to authenticate and pull Docker image from ECR
+function pull_and_run_image {
+    echo "Authenticating Docker to ECR..."
+    aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+    echo "Pulling Docker image from ECR..."
+    docker pull $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPOSITORY_NAME/nodeimage:$IMAGE_TAG
+
+    echo "Running Docker container..."
+    docker run -d --name $CONTAINER_NAME -p $PORT:$PORT $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPOSITORY_NAME:$IMAGE_TAG
+}
+
+# Execute function
+pull_and_run_image
+
+# List all containers, including stopped ones
+echo "All containers:"
+docker ps -a
+
+# Retrieve the container name
+CONTAINER_NAME=$(docker ps -f name=$CONTAINER_NAME -q)
+
+# Print the container name
+echo "Container name: $CONTAINER_NAME"
