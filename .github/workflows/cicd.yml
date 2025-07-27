@@ -1,89 +1,90 @@
 name: CI/CD to Private Azure Server
+
 on:
   push:
     branches: [master]
   pull_request:
     branches: [master]
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v3
-      
-      # Step 2: Set up Node.js (for Node.js apps)
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18' # Adjust to your Node.js version
-      
-      # Step 3: Install dependencies
+          node-version: '18'
+
       - name: Install dependencies
         run: npm install
-        working-directory: ./app # Adjust if your app is not in app/
-      
-      # Step 4: Run tests
+        working-directory: ./app
+
       - name: Run tests
         run: npm test
         working-directory: ./app
-      
-      # Step 5: Build application (if needed)
+
       - name: Build application
         run: npm run build
         working-directory: ./app
-        # Comment out if no build step is needed (e.g., for Python or static files)
-      
-      # Step 6: Archive build artifacts
-      - name: Archive artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: app-build
-          path: ./app/dist # Adjust to your build output (e.g., ./app for no build)
 
-  deploy:
-    needs: build-and-test # Run only if build-and-test succeeds
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' # Deploy only on push to main, not PRs
-    steps:
-      # Step 1: Checkout code
-      - name: Checkout code
-        uses: actions/checkout@v3
-      
-      # Step 2: Download build artifacts
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: app-build
           path: ./app/dist
-      
-      # Step 3: Install sshpass
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: app-build
+          path: ./app/dist
+
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
-      
-      # Step 4: Deploy to private server via jump server
-      - name: Deploy to Private Server
+
+      - name: Deploy to Private Server via Public Jump Host
         env:
           PUBLIC_SERVER_PASSWORD: ${{ secrets.PUBLIC_SERVER_PASSWORD }}
           PRIVATE_SERVER_PASSWORD: ${{ secrets.PRIVATE_SERVER_PASSWORD }}
         run: |
-          set -x # Enable debugging
-          # Copy build artifacts to public server
+          set -x
+
+          # Copy artifacts to public jump server
           sshpass -p "$PUBLIC_SERVER_PASSWORD" scp -o StrictHostKeyChecking=no -r ./app/dist amodh_vm_user@20.193.147.103:/tmp/app
-          
-          # SSH to public server, then to private server, and deploy
+
+          # SSH into public jump server
           sshpass -p "$PUBLIC_SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no amodh_vm_user@20.193.147.103 << 'EOF'
-            sshpass -p "$PRIVATE_SERVER_PASSWORD" scp -o StrictHostKeyChecking=no -r /tmp/app amodh_vm_private@10.0.0.132:/var/www/myapp
+            export PRIVATE_SERVER_PASSWORD=${{ secrets.PRIVATE_SERVER_PASSWORD }}
+
+            # Copy from jump to private server
+            sshpass -p "$PRIVATE_SERVER_PASSWORD" scp -o StrictHostKeyChecking=no -r /tmp/app amodh_vm_private@10.0.0.132:/var/www/myapp-temp
+
+            # SSH into private server to deploy
             sshpass -p "$PRIVATE_SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no amodh_vm_private@10.0.0.132 << 'INNER'
-              # Deploy Node.js app
+              set -x
+              # Clear and move files
               rm -rf /var/www/myapp/*
-              mv /tmp/app/* /var/www/myapp/
+              mv /var/www/myapp-temp/* /var/www/myapp/
+              rmdir /var/www/myapp-temp
+              
+              # Install and restart Node.js app
               cd /var/www/myapp
               npm install
               pm2 restart myapp || pm2 start app.js --name myapp
-              # Clean up
-              rm -rf /tmp/app
             INNER
-            # Clean up public server
+
+            # Cleanup jump server
             rm -rf /tmp/app
           EOF
