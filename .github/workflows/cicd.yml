@@ -62,8 +62,4 @@ jobs:
               cd /var/www/myapp/src
               pm2 start index.js
 
-              rm -f /tmp/app.tgz
-            INNER
-
-            rm -f /tmp/app.tgz
           EOF
