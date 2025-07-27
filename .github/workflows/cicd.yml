@@ -1,22 +1,28 @@
-name: Deploy to Private Azure Server (Full Repo Upload)
+name: Build and Deploy Node.js App
 
 on:
   push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+    branches:
+      - master
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Install sshpass
-        run: sudo apt-get update && sudo apt-get install -y sshpass
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
 
       - name: Package and Deploy All Files
         env:
@@ -25,41 +31,37 @@ jobs:
         run: |
           set -euxo pipefail
 
-          # Create archive (ignore temp/watched folders)
-          tar --warning=no-file-changed -czf app.tgz \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='node_modules' \
-            .
+          # Create tarball, ignore files that might change during archive
+          tar --exclude='.git' \
+              --exclude='.github' \
+              --exclude='node_modules' \
+              --ignore-failed-read \
+              -czf app.tgz .
 
-          # Copy to jump server
+          # Copy to public jump host
           sshpass -p "$PUBLIC_SERVER_PASSWORD" scp -o StrictHostKeyChecking=no app.tgz amodh_vm_user@20.193.147.103:/tmp/app.tgz
 
-          # SSH into jump server and transfer to private server
+          # SSH into public jump host
           sshpass -p "$PUBLIC_SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no amodh_vm_user@20.193.147.103 << 'EOF'
             export PRIVATE_SERVER_PASSWORD='${{ secrets.PRIVATE_SERVER_PASSWORD }}'
 
             # Copy to private server
             sshpass -p "$PRIVATE_SERVER_PASSWORD" scp -o StrictHostKeyChecking=no /tmp/app.tgz amodh_vm_private@10.0.0.132:/tmp/app.tgz
 
-            # SSH into private server
+            # SSH into private server and deploy
             sshpass -p "$PRIVATE_SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no amodh_vm_private@10.0.0.132 << 'INNER'
               set -euxo pipefail
 
-              # Prepare deployment directory
               mkdir -p /var/www/myapp
               rm -rf /var/www/myapp/*
               tar xzf /tmp/app.tgz -C /var/www/myapp
 
-              # Install dependencies and restart app
               cd /var/www/myapp
               npm install
               pm2 restart myapp || pm2 start app.js --name myapp
 
-              # Clean up
               rm -f /tmp/app.tgz
             INNER
 
-            # Clean up on public server
             rm -f /tmp/app.tgz
           EOF
