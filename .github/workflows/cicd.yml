@@ -56,9 +56,8 @@ jobs:
               rm -rf /var/www/myapp/*
               tar xzf /tmp/app.tgz -C /var/www/myapp
 
-              cd /var/www/myapp
-              npm install
-              pm2 restart myapp || pm2 start app.js --name myapp
+              cd /var/www/myapp/src
+              node index.js
 
               rm -f /tmp/app.tgz
             INNER
