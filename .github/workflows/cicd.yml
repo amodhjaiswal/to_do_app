@@ -60,7 +60,7 @@ jobs:
               npm install
               
               cd /var/www/myapp/src
-              node index.js
+              pm2 start index.js
 
               rm -f /tmp/app.tgz
             INNER
